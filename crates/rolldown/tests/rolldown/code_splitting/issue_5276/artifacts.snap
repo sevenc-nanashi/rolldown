@@ -1,0 +1,49 @@
+---
+source: crates/rolldown_testing/src/integration_test.rs
+---
+# Assets
+
+## imp.js
+
+```js
+//#region imp1.js
+const imp1 = 1;
+
+//#endregion
+//#region imp2.js
+const imp2 = 1;
+
+//#endregion
+export { imp1 as n, imp2 as t };
+```
+
+## imp1.js
+
+```js
+import { n as imp1 } from "./imp.js";
+
+export { imp1 };
+```
+
+## imp2.js
+
+```js
+import { t as imp2 } from "./imp.js";
+
+export { imp2 };
+```
+
+## main.js
+
+```js
+import { n as imp1 } from "./imp.js";
+
+//#region main.js
+const load = async () => {
+	console.log(await import("./imp.js").then((m) => m.imp1), await import("./imp.js").then((m) => m.imp2));
+};
+load();
+console.log(`imp1: `, imp1);
+
+//#endregion
+```

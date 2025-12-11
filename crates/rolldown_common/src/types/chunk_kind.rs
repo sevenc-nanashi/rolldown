@@ -5,7 +5,7 @@ pub enum ChunkKind {
   EntryPoint {
     meta: ChunkMeta,
     bit: u32,
-    module: ModuleIdx,
+    module: ModuleIdx
   },
   #[default]
   Common,

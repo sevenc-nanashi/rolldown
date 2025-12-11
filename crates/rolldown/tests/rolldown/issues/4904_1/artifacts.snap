@@ -6,17 +6,25 @@ source: crates/rolldown_testing/src/integration_test.rs
 ## lib.js
 
 ```js
+import { t as a } from "./lib2.js";
+
+export { a };
+```
+
+## lib2.js
+
+```js
 //#region lib.js
 const a = 42;
 
 //#endregion
-export { a };
+export { a as t };
 ```
 
 ## main.js
 
 ```js
-import { a } from "./lib.js";
+import { t as a } from "./lib2.js";
 
 //#region main.js
 const b = 42;

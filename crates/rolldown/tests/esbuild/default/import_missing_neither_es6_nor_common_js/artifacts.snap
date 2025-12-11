@@ -85,7 +85,7 @@ init_foo();
 
 ```js
 //#region import.js
-console.log(import("./foo2.js"));
+console.log(import("./foo.js"));
 
 //#endregion
 ```

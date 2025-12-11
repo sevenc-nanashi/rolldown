@@ -1,4 +1,4 @@
-use std::{cmp::Ordering, collections::VecDeque, path::Path};
+use std::{cmp::Ordering, collections::VecDeque, ops::Not, path::Path};
 
 use crate::{
   chunk_graph::ChunkGraph, stages::generate_stage::chunk_ext::ChunkDebugExt,
@@ -49,8 +49,6 @@ impl GenerateStage<'_> {
       }; self.link_output.module_table.modules.len()];
     let mut bits_to_chunk = FxHashMap::with_capacity(self.link_output.entries.len());
 
-    let mut entry_module_to_entry_chunk: FxHashMap<ModuleIdx, ChunkIdx> =
-      FxHashMap::with_capacity(self.link_output.entries.len());
     let input_base = ArcStr::from(
       self
         .get_common_dir_of_all_modules(self.link_output.module_table.modules.as_vec())
@@ -115,16 +113,16 @@ impl GenerateStage<'_> {
           self.link_output.metas[module.idx].depended_runtime_helper,
         );
         // bits_to_chunk.insert(bits, chunk); // This line is intentionally commented out because `bits_to_chunk` is not used in this loop. It is updated elsewhere in the `init_entry_point` and `split_chunks` methods.
-        entry_module_to_entry_chunk.insert(module.idx, chunk_idx);
+        chunk_graph.entry_module_to_entry_chunk.insert(module.idx, chunk_idx);
       }
     } else {
       self.init_entry_point(
         &mut chunk_graph,
         &mut bits_to_chunk,
-        &mut entry_module_to_entry_chunk,
         entries_len,
         &input_base,
       );
+      
       self
         .split_chunks(&mut index_splitting_info, &mut chunk_graph, &mut bits_to_chunk, &input_base)
         .await?;
@@ -159,7 +157,6 @@ impl GenerateStage<'_> {
       }
     }
 
-    chunk_graph.entry_module_to_entry_chunk = entry_module_to_entry_chunk;
     chunk_graph.sort_chunk_modules(self.link_output, self.options);
 
     chunk_graph
@@ -639,7 +636,6 @@ impl GenerateStage<'_> {
     &self,
     chunk_graph: &mut ChunkGraph,
     bits_to_chunk: &mut FxHashMap<BitSet, ChunkIdx>,
-    entry_module_to_entry_chunk: &mut FxHashMap<ModuleIdx, ChunkIdx>,
     entries_len: u32,
     input_base: &ArcStr,
   ) {
@@ -710,7 +706,7 @@ impl GenerateStage<'_> {
       }
 
       bits_to_chunk.insert(bits, chunk_idx);
-      entry_module_to_entry_chunk.insert(entry_point.idx, chunk_idx);
+      chunk_graph.entry_module_to_entry_chunk.insert(entry_point.idx, chunk_idx);
     }
   }
 
@@ -798,6 +794,37 @@ impl GenerateStage<'_> {
         pending_common_chunks,
       );
     }
+    let mut rewrite_entry_to_chunk = FxHashMap::default();;
+    for chunk in chunk_graph.chunk_table.iter() {
+      let ChunkKind::EntryPoint { meta, bit, module } = chunk.kind else {
+        continue;
+      };
+      if meta.contains(ChunkMeta::UserDefinedEntry | ChunkMeta::EmittedChunk) {
+        continue;
+      }
+      if !chunk.modules.is_empty() {
+        continue;
+      }
+      // Check if the entry module is included in a common chunk
+      let Some(target_chunk_idx) = chunk_graph.module_to_chunk[module] else {
+        continue;
+      };
+      let target_chunk = &chunk_graph.chunk_table[target_chunk_idx];
+      if !matches!(target_chunk.kind, ChunkKind::Common) {
+        continue;
+      }
+      rewrite_entry_to_chunk.insert(module, target_chunk_idx);
+    };
+    
+    for (entry_module, target_chunk) in rewrite_entry_to_chunk {
+      dbg!(&self.link_output.module_table[entry_module].stable_id());
+      dbg!(&chunk_graph.entry_module_to_entry_chunk.get(&entry_module));
+      let entry_chunk = chunk_graph
+        .entry_module_to_entry_chunk
+        .remove(&entry_module);
+      chunk_graph.entry_module_to_entry_chunk.insert(entry_module, target_chunk);
+    }
+    
     Ok(())
   }
 

@@ -74,7 +74,7 @@ impl GenerateStage<'_> {
   ) {
     let static_entry_chunk_reference: FxHashMap<ChunkIdx, FxHashSet<ChunkIdx>> =
       self.construct_static_entry_to_reached_dynamic_entries_map(chunk_graph);
-
+    dbg!(&pending_common_chunks);
     let entry_chunk_idx =
       chunk_graph.chunk_table.iter_enumerated().map(|(idx, _)| idx).collect::<FxHashSet<_>>();
     // extract entry chunk module relation
@@ -89,6 +89,7 @@ impl GenerateStage<'_> {
         .filter(|idx| entry_chunk_idx.contains(idx))
         .collect_vec();
 
+      
       let merge_target = Self::try_insert_into_existing_chunk(
         &chunk_idxs,
         &static_entry_chunk_reference,
@@ -265,6 +266,62 @@ impl GenerateStage<'_> {
       ret.push(chunk.entry_module_idx()?);
     }
     Some(ret)
+  }
+
+  /// Checks if merging the given modules into a chunk with AllowExtension would create export conflicts.
+  ///
+  /// With `preserveEntrySignatures: 'allow-extension'`, we can add new exports to the chunk,
+  /// but we must ensure that no two modules export the same name. This method checks if any
+  /// of the modules being merged would conflict with exports from existing AllowExtension
+  /// entry modules in the target chunk.
+  fn can_merge_exports_without_conflict(
+    &self,
+    target_chunk_idx: ChunkIdx,
+    modules: &[ModuleIdx],
+    chunk_graph: &ChunkGraph,
+  ) -> bool {
+    let chunk = &chunk_graph.chunk_table[target_chunk_idx];
+    let metas = &self.link_output.metas;
+
+    // Collect all export names from modules being merged
+    let mut merging_exports = FxHashSet::default();
+    for &module_idx in modules {
+      let module_meta = &metas[module_idx];
+      for export_name in module_meta.resolved_exports.keys() {
+        merging_exports.insert(export_name.as_str());
+      }
+    }
+
+    // Check for conflicts with existing entry module in the chunk (if it's an entry point chunk)
+    if let Some(entry_module_idx) = chunk.entry_module_idx() {
+      // Only check if this is an AllowExtension entry chunk
+      if matches!(chunk.preserve_entry_signature, Some(PreserveEntrySignatures::AllowExtension)) {
+        let entry_meta = &metas[entry_module_idx];
+        for export_name in entry_meta.resolved_exports.keys() {
+          if merging_exports.contains(export_name.as_str()) {
+            return false; // Conflict found
+          }
+        }
+      }
+    }
+
+    // Also check other modules already in the chunk that might have exports
+    // (in case multiple modules with AllowExtension have been merged)
+    for &existing_module_idx in &chunk.modules {
+      // Skip if it's the same as modules being merged
+      if modules.contains(&existing_module_idx) {
+        continue;
+      }
+      
+      let existing_meta = &metas[existing_module_idx];
+      for export_name in existing_meta.resolved_exports.keys() {
+        if merging_exports.contains(export_name.as_str()) {
+          return false; // Conflict found
+        }
+      }
+    }
+
+    true // No conflicts
   }
 
   /// Checks if merging the given modules into an entry chunk would change the entry's export signature.
