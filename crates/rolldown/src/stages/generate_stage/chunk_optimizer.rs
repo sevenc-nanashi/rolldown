@@ -89,7 +89,6 @@ impl GenerateStage<'_> {
         .filter(|idx| entry_chunk_idx.contains(idx))
         .collect_vec();
 
-      
       let merge_target = Self::try_insert_into_existing_chunk(
         &chunk_idxs,
         &static_entry_chunk_reference,
@@ -312,7 +311,7 @@ impl GenerateStage<'_> {
       if modules.contains(&existing_module_idx) {
         continue;
       }
-      
+
       let existing_meta = &metas[existing_module_idx];
       for export_name in existing_meta.resolved_exports.keys() {
         if merging_exports.contains(export_name.as_str()) {

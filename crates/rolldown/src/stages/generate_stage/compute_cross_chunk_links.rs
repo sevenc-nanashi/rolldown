@@ -307,10 +307,9 @@ impl GenerateStage<'_> {
     for (mut chunk_id, symbol_list) in chunk_id_to_symbols_vec {
       dbg!(chunk_id);
       dbg!(&symbol_list);
-      
+
       if (chunk_id == ChunkIdx::from_raw(1) || chunk_id == ChunkIdx::from_raw(2)) {
         dbg!(&symbol_list);
-        
       }
       for declared in symbol_list {
         let declared = declared.inner();

@@ -116,13 +116,8 @@ impl GenerateStage<'_> {
         chunk_graph.entry_module_to_entry_chunk.insert(module.idx, chunk_idx);
       }
     } else {
-      self.init_entry_point(
-        &mut chunk_graph,
-        &mut bits_to_chunk,
-        entries_len,
-        &input_base,
-      );
-      
+      self.init_entry_point(&mut chunk_graph, &mut bits_to_chunk, entries_len, &input_base);
+
       self
         .split_chunks(&mut index_splitting_info, &mut chunk_graph, &mut bits_to_chunk, &input_base)
         .await?;
@@ -794,7 +789,7 @@ impl GenerateStage<'_> {
         pending_common_chunks,
       );
     }
-    let mut rewrite_entry_to_chunk = FxHashMap::default();;
+    let mut rewrite_entry_to_chunk = FxHashMap::default();
     for chunk in chunk_graph.chunk_table.iter() {
       let ChunkKind::EntryPoint { meta, bit, module } = chunk.kind else {
         continue;
@@ -814,17 +809,15 @@ impl GenerateStage<'_> {
         continue;
       }
       rewrite_entry_to_chunk.insert(module, target_chunk_idx);
-    };
-    
+    }
+
     for (entry_module, target_chunk) in rewrite_entry_to_chunk {
       dbg!(&self.link_output.module_table[entry_module].stable_id());
       dbg!(&chunk_graph.entry_module_to_entry_chunk.get(&entry_module));
-      let entry_chunk = chunk_graph
-        .entry_module_to_entry_chunk
-        .remove(&entry_module);
+      let entry_chunk = chunk_graph.entry_module_to_entry_chunk.remove(&entry_module);
       chunk_graph.entry_module_to_entry_chunk.insert(entry_module, target_chunk);
     }
-    
+
     Ok(())
   }
 
